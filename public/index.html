@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seguimiento de Programación</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 30px;
+            color: #2c3e50;
+            font-size: 2.5rem;
+            font-weight: 500;
+        }
+
+        #save-button {
+            display: block;
+            margin: 30px auto;
+            padding: 12px 25px;
+            font-size: 1rem;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #save-button:hover {
+            background-color: #2980b9;
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        #handsontable-container {
+            margin: 30px auto;
+            max-width: 1200px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .filter-container {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 30px;
+        }
+
+        .filter-container select, .filter-container input {
+            padding: 8px;
+            font-size: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: white;
+            transition: border-color 0.3s ease;
+        }
+
+        .filter-container select:focus, .filter-container input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 5px;
+            color: white;
+            font-size: 1rem;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .toast.success {
+            background-color: #28a745;
+            opacity: 1;
+        }
+
+        .toast.error {
+            background-color: #dc3545;
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .filter-container {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .filter-container select, .filter-container input {
+                width: 80%;
+                margin-bottom: 10px;
+            }
+
+            #handsontable-container {
+                margin: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Seguimiento de Programación</h1>
+    <div class="filter-container">
+        <input type="date" id="date-filter" onchange="filterData()" placeholder="Selecciona una fecha">
+        <select id="hora-filter" onchange="filterData()">
+            <option value="" disabled selected>Selecciona una Hora</option>
+        </select>
+        <select id="bimodal-filter" onchange="filterData()">
+            <option value="" disabled selected>Selecciona un Bimodal</option>
+        </select>
+        <select id="proveedor-filter" onchange="filterData()">
+            <option value="" disabled selected>Selecciona un Proveedor</option>
+        </select>
+        <select id="ap-filter" onchange="filterData()">
+            <option value="" disabled selected>Selecciona una AP</option>
+        </select>
+    </div>
+    <button id="save-button">Guardar Cambios</button>
+    <div id="handsontable-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const container = document.getElementById('handsontable-container');
+            let hot;
+
+            // Obtener las opciones para los filtros
+            const loadFilterOptions = async () => {
+                try {
+                    const response = await fetch('/api/get-filter-options');
+                    if (!response.ok) throw new Error('Error al cargar las opciones');
+                    const options = await response.json();
+
+                    // Llenar las listas desplegables
+                    const horaFilter = document.getElementById('hora-filter');
+                    const bimodalFilter = document.getElementById('bimodal-filter');
+                    const proveedorFilter = document.getElementById('proveedor-filter');
+                    const apFilter = document.getElementById('ap-filter');
+
+                    options.hora.forEach(hora => {
+                        const option = document.createElement('option');
+                        option.value = hora;
+                        option.textContent = hora;
+                        horaFilter.appendChild(option);
+                    });
+
+                    options.bimodal.forEach(bimodal => {
+                        const option = document.createElement('option');
+                        option.value = bimodal;
+                        option.textContent = bimodal;
+                        bimodalFilter.appendChild(option);
+                    });
+
+                    options.proveedor.forEach(proveedor => {
+                        const option = document.createElement('option');
+                        option.value = proveedor;
+                        option.textContent = proveedor;
+                        proveedorFilter.appendChild(option);
+                    });
+
+                    options.ap_programacion.forEach(ap => {
+                        const option = document.createElement('option');
+                        option.value = ap;
+                        option.textContent = ap;
+                        apFilter.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error:', error);
+                    showToast('No se pudieron cargar las opciones de filtro.', 'error');
+                }
+            };
+
+            // Cargar las opciones de filtro al iniciar
+            await loadFilterOptions();
+
+            // Cargar la tabla
+            const loadTable = async () => {
+                try {
+                    const response = await fetch('/api/get-table');
+                    if (!response.ok) throw new Error('Error al cargar la tabla');
+                    const data = await response.json();
+
+                    hot = new Handsontable(container, {
+                        data: [],
+                        colHeaders: ['Fecha de Viaje', 'Hora', 'Bimodal', 'Proveedor Unidad', 'Unidades', 'AP_programacion'],
+                        columns: [
+                            { data: 'fecha', readOnly: true, width: 120 },
+                            { data: 'hora', readOnly: true, width: 100 },
+                            { data: 'bimodal', readOnly: true, width: 150 },
+                            { data: 'proveedor', readOnly: true, width: 150 },
+                            { data: 'unidades', type: 'numeric', width: 100 },
+                            { data: 'ap_programacion', readOnly: true, width: 150 }
+                        ],
+                        filters: true,
+                        dropdownMenu: true,
+                        rowHeaders: true,
+                        minSpareRows: 1,
+                        contextMenu: true,
+                        licenseKey: 'non-commercial-and-evaluation',
+                        stretchH: 'all',
+                        height: 'auto',
+                        width: '100%',
+                        manualColumnResize: true,
+                        manualRowResize: true
+                    });
+                } catch (error) {
+                    console.error('Error:', error);
+                    showToast('No se pudieron cargar los datos.', 'error');
+                }
+            };
+
+            await loadTable();
+
+            // Función para filtrar los datos
+            window.filterData = async function() {
+                const dateFilter = document.getElementById('date-filter').value;
+                const horaFilter = document.getElementById('hora-filter').value;
+                const bimodalFilter = document.getElementById('bimodal-filter').value;
+                const proveedorFilter = document.getElementById('proveedor-filter').value;
+                const apFilter = document.getElementById('ap-filter').value;
+
+                const filters = {
+                    fecha: dateFilter,
+                    hora: horaFilter,
+                    bimodal: bimodalFilter,
+                    proveedor: proveedorFilter,
+                    ap_programacion: apFilter
+                };
+
+                const queryParams = new URLSearchParams(filters).toString();
+
+                try {
+                    const response = await fetch(`/api/get-table?${queryParams}`);
+                    if (!response.ok) throw new Error('Error al filtrar los datos');
+                    const data = await response.json();
+                    hot.loadData(data);
+                } catch (error) {
+                    console.error('Error:', error);
+                    showToast('No se pudieron filtrar los datos.', 'error');
+                }
+            };
+
+            // Guardar cambios
+            document.getElementById('save-button').addEventListener('click', async () => {
+                if (hot) {
+                    Swal.fire({
+                        title: '¿Guardar cambios?',
+                        text: '¿Estás seguro de que deseas guardar los cambios?',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, guardar',
+                        cancelButtonText: 'Cancelar'
+                    }).then(async (result) => {
+                        if (result.isConfirmed) {
+                            const updatedData = hot.getData();
+                            try {
+                                const response = await fetch('/api/update-table', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(updatedData)
+                                });
+                                if (!response.ok) throw new Error('Error al guardar los datos');
+                                const result = await response.json();
+                                showToast(result.message, 'success');
+                            } catch (error) {
+                                console.error('Error:', error);
+                                showToast('No se pudieron guardar los cambios.', 'error');
+                            }
+                        } else {
+                            showToast('Guardado cancelado.', 'error');
+                        }
+                    });
+                } else {
+                    showToast('La tabla no se ha cargado correctamente.', 'error');
+                }
+            });
+
+            // Función para mostrar notificaciones
+            function showToast(message, type) {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+            }
+        });
+    </script>
+</body>
+</html>

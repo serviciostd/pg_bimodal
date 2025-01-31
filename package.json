@@ -1,0 +1,16 @@
+{
+    "name": "seguimiento-programacion",
+    "version": "1.0.0",
+    "description": "Aplicación de seguimiento de programación",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "body-parser": "^1.19.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.7",
+        "express": "^4.17.1",
+        "mssql": "^9.0.1"
+    }
+}
